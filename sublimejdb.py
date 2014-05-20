@@ -1,5 +1,5 @@
 """
-Copyright (c) 2012 Fredrik Ehnbom
+Copyright (c) 2012 Fredrik Ehnbom, 2014 Jason Gardner
 
 This software is provided 'as-is', without any express or implied
 warranty. In no event will the authors be held liable for any damages
@@ -59,18 +59,18 @@ except:
         return s.decode("utf-8")
 
     import queue as Queue
-    from SublimeGDB.resultparser import parse_result_line
+    from SublimeJDB.resultparser import parse_result_line
 
 def get_setting(key, default=None, view=None):
     try:
         if view is None:
             view = sublime.active_window().active_view()
         s = view.settings()
-        if s.has("sublimegdb_%s" % key):
-            return s.get("sublimegdb_%s" % key)
+        if s.has("sublimejdb_%s" % key):
+            return s.get("sublimejdb_%s" % key)
     except:
         pass
-    return sublime.load_settings("SublimeGDB.sublime-settings").get(key, default)
+    return sublime.load_settings("SublimeJDB.sublime-settings").get(key, default)
 
 
 def expand_path(value, window):
@@ -110,26 +110,26 @@ DEBUG = None
 DEBUG_FILE = None
 __debug_file_handle = None
 
-gdb_lastresult = ""
-gdb_lastline = ""
-gdb_cursor = ""
-gdb_cursor_position = 0
-gdb_last_cursor_view = None
-gdb_bkp_layout = {}
-gdb_bkp_window = None
-gdb_bkp_view = None
+jdb_lastresult = ""
+jdb_lastline = ""
+jdb_cursor = ""
+jdb_cursor_position = 0
+jdb_last_cursor_view = None
+jdb_bkp_layout = {}
+jdb_bkp_window = None
+jdb_bkp_view = None
 
-gdb_shutting_down = False
-gdb_process = None
-gdb_stack_frame = None
-gdb_stack_index = 0
+jdb_shutting_down = False
+jdb_process = None
+jdb_stack_frame = None
+jdb_stack_index = 0
 
-gdb_nonstop = False
+jdb_nonstop = False
 
 if os.name == 'nt':
-    gdb_nonstop = False
+    jdb_nonstop = False
 
-gdb_run_status = None
+jdb_run_status = None
 result_regex = re.compile("(?<=\^)[^,\"]*")
 collapse_regex = re.compile("{.*}", re.DOTALL)
 
@@ -156,7 +156,7 @@ def log_debug(line):
             DEBUG = False
 
 
-class GDBView(object):
+class JDBView(object):
     def __init__(self, name, s=True, settingsprefix=None):
         self.queue = Queue.Queue()
         self.name = name
@@ -189,7 +189,7 @@ class GDBView(object):
             self.destroy_view()
 
     def should_update(self):
-        return self.is_open() and is_running() and gdb_run_status == "stopped"
+        return self.is_open() and is_running() and jdb_run_status == "stopped"
 
     def set_syntax(self, syntax):
         if self.is_open():
@@ -271,13 +271,13 @@ class GDBView(object):
         return self.view
 
     def do_add_line(self, line):
-        self.view.run_command("gdb_view_add_line", {"line": line, "doScroll": self.doScroll})
+        self.view.run_command("jdb_view_add_line", {"line": line, "doScroll": self.doScroll})
 
     def do_fold_all(self, data):
         self.view.run_command("fold_all")
 
     def do_clear(self, data):
-        self.view.run_command("gdb_view_clear")
+        self.view.run_command("jdb_view_clear")
 
     def do_scroll(self, data):
         self.view.run_command("goto_line", {"line": data + 1})
@@ -309,13 +309,13 @@ class GDBView(object):
             self.clear()
 
 
-class GdbViewClear(sublime_plugin.TextCommand):
+class JdbViewClear(sublime_plugin.TextCommand):
     def run(self, edit):
         self.view.set_read_only(False)
         self.view.erase(edit, sublime.Region(0, self.view.size()))
         self.view.set_read_only(True)
 
-class GdbViewAddLine(sublime_plugin.TextCommand):
+class JdbViewAddLine(sublime_plugin.TextCommand):
     def run(self, edit, line, doScroll):
         self.view.set_read_only(False)
         self.view.insert(edit, self.view.size(), line)
@@ -323,7 +323,7 @@ class GdbViewAddLine(sublime_plugin.TextCommand):
         if doScroll:
             self.view.show(self.view.size())
 
-class GDBVariable:
+class JDBVariable:
     def __init__(self, vp=None, parent=None):
         self.parent = parent
         self.valuepair = vp
@@ -367,7 +367,7 @@ class GDBVariable:
     def add_children(self, name):
         children = listify(parse_result_line(run_cmd("-var-list-children 1 \"%s\"" % name, True))["children"]["child"])
         for child in children:
-            child = GDBVariable(child, parent=self)
+            child = JDBVariable(child, parent=self)
             if child.get_name().endswith(".private") or \
                     child.get_name().endswith(".protected") or \
                     child.get_name().endswith(".public"):
@@ -384,7 +384,7 @@ class GDBVariable:
         line = run_cmd("-var-assign %s \"%s\"" % (self.get_name(), val), True)
         if get_result(line) == "done":
             self.valuepair["value"] = parse_result_line(line)["value"]
-            gdb_variables_view.update_variables(True)
+            jdb_variables_view.update_variables(True)
         else:
             err = line[line.find("msg=") + 4:]
             sublime.status_message("Error: %s" % err)
@@ -477,7 +477,7 @@ def itof(i):
     val = struct.pack("I", i)
     return struct.unpack("f", val)[0]
 
-class GDBRegister:
+class JDBRegister:
     def __init__(self, name, index, val):
         self.name = name
         self.index = index
@@ -521,7 +521,7 @@ class GDBRegister:
     def set_value(self, val):
         self.value = val
 
-    def set_gdb_value(self, val):
+    def set_jdb_value(self, val):
         if "." in val:
             if val.endswith("f"):
                 val = struct.unpack("I", struct.pack("f", float(val[:-1])))[0]
@@ -531,23 +531,23 @@ class GDBRegister:
         run_cmd("-data-evaluate-expression $%s=%s" % (self.name, val))
 
     def edit_on_done(self, val):
-        self.set_gdb_value(val)
-        gdb_register_view.update_values()
+        self.set_jdb_value(val)
+        jdb_register_view.update_values()
 
     def edit(self):
         sublime.active_window().show_input_panel("$%s =" % self.name, self.value, self.edit_on_done, None, None)
 
 
-class GDBRegisterView(GDBView):
+class JDBRegisterView(JDBView):
     def __init__(self):
-        super(GDBRegisterView, self).__init__("GDB Registers", s=False, settingsprefix="registers")
+        super(JDBRegisterView, self).__init__("JDB Registers", s=False, settingsprefix="registers")
         self.values = None
 
     def open(self):
-        super(GDBRegisterView, self).open()
-        self.set_syntax("Packages/SublimeGDB/gdb_registers.tmLanguage")
+        super(JDBRegisterView, self).open()
+        self.set_syntax("Packages/SublimeJDB/jdb_registers.tmLanguage")
         self.get_view().settings().set("word_wrap", False)
-        if self.is_open() and gdb_run_status == "stopped":
+        if self.is_open() and jdb_run_status == "stopped":
             self.update_values()
 
     def get_names(self):
@@ -571,7 +571,7 @@ class GDBRegisterView(GDBView):
 
             for i in range(len(vals)):
                 idx = int(vals[i]["number"])
-                self.values.append(GDBRegister(names[idx], idx, vals[i]["value"]))
+                self.values.append(JDBRegister(names[idx], idx, vals[i]["value"]))
         else:
             dirtylist = regs = parse_result_line(run_cmd("-data-list-changed-registers", True))["changed-registers"]
             regvals = parse_result_line(run_cmd("-data-list-register-values x %s" % " ".join(regs), True))["register-values"]
@@ -598,7 +598,7 @@ class GDBRegisterView(GDBView):
                 region = region.cover(v.full_line(v.text_point(self.values[i].line + self.values[i].lines - 1, 0)))
 
             regions.append(region)
-        v.add_regions("sublimegdb.dirtyregisters", regions,
+        v.add_regions("sublimejdb.dirtyregisters", regions,
                         get_setting("changed_variable_scope", "entity.name.class"),
                         get_setting("changed_variable_icon", ""),
                         sublime.DRAW_OUTLINED)
@@ -614,15 +614,15 @@ class GDBRegisterView(GDBView):
         return None
 
 
-class GDBVariablesView(GDBView):
+class JDBVariablesView(JDBView):
     def __init__(self):
-        super(GDBVariablesView, self).__init__("GDB Variables", False, settingsprefix="variables")
+        super(JDBVariablesView, self).__init__("JDB Variables", False, settingsprefix="variables")
         self.variables = []
 
     def open(self):
-        super(GDBVariablesView, self).open()
+        super(JDBVariablesView, self).open()
         self.set_syntax("Packages/C++/C++.tmLanguage")
-        if self.is_open() and gdb_run_status == "stopped":
+        if self.is_open() and jdb_run_status == "stopped":
             self.update_variables(False)
 
     def update_view(self):
@@ -638,7 +638,7 @@ class GDBVariablesView(GDBView):
         v = self.get_view()
         for dirty in dirtylist:
             regions.append(v.full_line(v.text_point(dirty.line, 0)))
-        v.add_regions("sublimegdb.dirtyvariables", regions,
+        v.add_regions("sublimejdb.dirtyvariables", regions,
                         get_setting("changed_variable_scope", "entity.name.class"),
                         get_setting("changed_variable_icon", ""),
                         sublime.DRAW_OUTLINED)
@@ -664,7 +664,7 @@ class GDBVariablesView(GDBView):
             return None
         var = parse_result_line(line)
         var['exp'] = exp
-        return GDBVariable(var)
+        return JDBVariable(var)
 
     def update_variables(self, sameFrame):
         if not self.should_update():
@@ -710,7 +710,7 @@ class GDBVariablesView(GDBView):
         if not sameFrame:
             for var in self.variables:
                 var.delete()
-            args = self.extract_varnames(parse_result_line(run_cmd("-stack-list-arguments 0 %d %d" % (gdb_stack_index, gdb_stack_index), True))["stack-args"]["frame"]["args"])
+            args = self.extract_varnames(parse_result_line(run_cmd("-stack-list-arguments 0 %d %d" % (jdb_stack_index, jdb_stack_index), True))["stack-args"]["frame"]["args"])
             self.variables = []
             for arg in args:
                 self.add_variable(arg)
@@ -752,7 +752,7 @@ class GDBVariablesView(GDBView):
                 self.update()
 
 
-class GDBCallstackFrame:
+class JDBCallstackFrame:
     def __init__(self, func, args):
         self.func = func
         self.args = args
@@ -773,24 +773,24 @@ class GDBCallstackFrame:
         return output
 
 
-class GDBCallstackView(GDBView):
+class JDBCallstackView(JDBView):
     def __init__(self):
-        super(GDBCallstackView, self).__init__("GDB Callstack", settingsprefix="callstack")
+        super(JDBCallstackView, self).__init__("JDB Callstack", settingsprefix="callstack")
         self.frames = []
 
     def open(self):
-        super(GDBCallstackView, self).open()
+        super(JDBCallstackView, self).open()
         self.set_syntax("Packages/C++/C++.tmLanguage")
-        if self.is_open() and gdb_run_status == "stopped":
+        if self.is_open() and jdb_run_status == "stopped":
             self.update_callstack()
 
     def update_callstack(self):
         if not self.should_update():
             return
-        global gdb_cursor_position
+        global jdb_cursor_position
         line = run_cmd("-stack-list-frames", True)
         if get_result(line) == "error":
-            gdb_cursor_position = 0
+            jdb_cursor_position = 0
             update_view_markers()
             return
         frames = listify(parse_result_line(line)["stack"]["frame"])
@@ -803,7 +803,7 @@ class GDBCallstackView(GDBView):
             arg = {}
             if len(args) > i:
                 arg = args[i]["args"]
-            f = GDBCallstackFrame(frames[i]["func"], arg)
+            f = JDBCallstackFrame(frames[i]["func"], arg)
             self.frames.append(f)
             self.add_line(f.format())
         self.set_viewport_position(pos)
@@ -812,16 +812,16 @@ class GDBCallstackView(GDBView):
     def update_marker(self, pos_scope, pos_icon):
         if self.is_open():
             view = self.get_view()
-            if gdb_stack_index != -1:
+            if jdb_stack_index != -1:
                 line = 0
-                for i in range(gdb_stack_index):
+                for i in range(jdb_stack_index):
                     line += self.frames[i].lines
 
-                view.add_regions("sublimegdb.stackframe",
+                view.add_regions("sublimejdb.stackframe",
                                     [view.line(view.text_point(line, 0))],
                                     pos_scope, pos_icon, sublime.HIDDEN)
             else:
-                view.erase_regions("sublimegdb.stackframe")
+                view.erase_regions("sublimejdb.stackframe")
 
     def select(self, row):
         line = 0
@@ -834,7 +834,7 @@ class GDBCallstackView(GDBView):
             line += fl
 
 
-class GDBThread:
+class JDBThread:
     def __init__(self, id, state="UNKNOWN", func="???()"):
         self.id = id
         self.state = state
@@ -844,16 +844,16 @@ class GDBThread:
         return "%03d - %10s - %s\n" % (self.id, self.state, self.func)
 
 
-class GDBThreadsView(GDBView):
+class JDBThreadsView(JDBView):
     def __init__(self):
-        super(GDBThreadsView, self).__init__("GDB Threads", s=False, settingsprefix="threads")
+        super(JDBThreadsView, self).__init__("JDB Threads", s=False, settingsprefix="threads")
         self.threads = []
         self.current_thread = 0
 
     def open(self):
-        super(GDBThreadsView, self).open()
+        super(JDBThreadsView, self).open()
         self.set_syntax("Packages/C++/C++.tmLanguage")
-        if self.is_open() and gdb_run_status == "stopped":
+        if self.is_open() and jdb_run_status == "stopped":
             self.update_threads()
 
     def update_threads(self):
@@ -863,7 +863,7 @@ class GDBThreadsView(GDBView):
         ids = parse_result_line(run_cmd("-thread-list-ids", True))
         if get_result(res) == "error":
             if "thread-ids" in ids and "thread-id" in ids["thread-ids"]:
-                self.threads = [GDBThread(int(id)) for id in ids["thread-ids"]["thread-id"]]
+                self.threads = [JDBThread(int(id)) for id in ids["thread-ids"]["thread-id"]]
                 if "threads" in ids and "thread" in ids["threads"]:
                     for thread in ids["threads"]["thread"]:
                         if "thread-id" in thread and "state" in thread:
@@ -893,7 +893,7 @@ class GDBThreadsView(GDBView):
                             if "value" in arg:
                                 args += " = " + arg["value"]
                     func = "%s(%s);" % (func, args)
-                self.threads.append(GDBThread(int(thread["id"]), thread["state"], func))
+                self.threads.append(JDBThread(int(thread["id"]), thread["state"], func))
 
         if "current-thread-id" in ids:
             self.current_thread = int(ids["current-thread-id"])
@@ -915,11 +915,11 @@ class GDBThreadsView(GDBView):
                     break
 
             if line != -1:
-                view.add_regions("sublimegdb.currentthread",
+                view.add_regions("sublimejdb.currentthread",
                                     [view.line(view.text_point(line, 0))],
                                     pos_scope, pos_icon, sublime.HIDDEN)
             else:
-                view.erase_regions("sublimegdb.currentthread")
+                view.erase_regions("sublimejdb.currentthread")
 
     def select_thread(self, thread):
         run_cmd("-thread-select %d" % thread)
@@ -931,21 +931,21 @@ class GDBThreadsView(GDBView):
         self.select_thread(self.threads[row].id)
 
 
-class GDBDisassemblyView(GDBView):
+class JDBDisassemblyView(JDBView):
     def __init__(self):
-        super(GDBDisassemblyView, self).__init__("GDB Disassembly", s=False, settingsprefix="disassembly")
+        super(JDBDisassemblyView, self).__init__("JDB Disassembly", s=False, settingsprefix="disassembly")
         self.start = -1
         self.end = -1
 
     def open(self):
-        super(GDBDisassemblyView, self).open()
-        self.set_syntax("Packages/SublimeGDB/gdb_disasm.tmLanguage")
+        super(JDBDisassemblyView, self).open()
+        self.set_syntax("Packages/SublimeJDB/jdb_disasm.tmLanguage")
         self.get_view().settings().set("word_wrap", False)
-        if self.is_open() and gdb_run_status == "stopped":
+        if self.is_open() and jdb_run_status == "stopped":
             self.update_disassembly()
 
     def clear(self):
-        super(GDBDisassemblyView, self).clear()
+        super(JDBDisassemblyView, self).clear()
         self.start = -1
         self.end = -1
 
@@ -987,16 +987,16 @@ class GDBDisassemblyView(GDBView):
         view = self.get_view()
         reg = view.find("^0x[0]*%x:" % pc, 0)
         if reg is None:
-            view.erase_regions("sublimegdb.programcounter")
+            view.erase_regions("sublimejdb.programcounter")
         else:
             pos_scope = get_setting("position_scope", "entity.name.class")
             pos_icon = get_setting("position_icon", "bookmark")
-            view.add_regions("sublimegdb.programcounter",
+            view.add_regions("sublimejdb.programcounter",
                             [reg],
                             pos_scope, pos_icon, sublime.HIDDEN)
 
 
-class GDBBreakpoint(object):
+class JDBBreakpoint(object):
     def __init__(self, filename="", line=0, addr=""):
         self.original_filename = normalize(filename)
         self.original_line = line
@@ -1083,10 +1083,10 @@ class GDBBreakpoint(object):
         return "%d - %s:%d\n" % (self.number, self.filename, self.line)
 
 
-class GDBWatch(GDBBreakpoint):
+class JDBWatch(JDBBreakpoint):
     def __init__(self, exp):
         self.exp = exp
-        super(GDBWatch, self).__init__(None, -1)
+        super(JDBWatch, self).__init__(None, -1)
 
     def insert(self):
         out = run_cmd("-break-watch %s" % self.exp, True)
@@ -1100,14 +1100,14 @@ class GDBWatch(GDBBreakpoint):
         return "%d - watch: %s\n" % (self.number, self.exp)
 
 
-class GDBBreakpointView(GDBView):
+class JDBBreakpointView(JDBView):
     def __init__(self):
-        super(GDBBreakpointView, self).__init__("GDB Breakpoints", s=False, settingsprefix="breakpoints")
+        super(JDBBreakpointView, self).__init__("JDB Breakpoints", s=False, settingsprefix="breakpoints")
         self.breakpoints = []
 
     def open(self):
-        super(GDBBreakpointView, self).open()
-        # self.set_syntax("Packages/SublimeGDB/gdb_disasm.tmLanguage")
+        super(JDBBreakpointView, self).open()
+        # self.set_syntax("Packages/SublimeJDB/jdb_disasm.tmLanguage")
         self.get_view().settings().set("word_wrap", False)
         if self.is_open():
             self.update_view()
@@ -1124,11 +1124,11 @@ class GDBBreakpointView(GDBView):
             return
         fn = normalize(fn)
         for bkpt in self.breakpoints:
-            if bkpt.filename == fn and not (bkpt.line == gdb_cursor_position and fn == gdb_cursor):
+            if bkpt.filename == fn and not (bkpt.line == jdb_cursor_position and fn == jdb_cursor):
                 bps.append(view.full_line(view.text_point(bkpt.line - 1, 0)))
 
-        view.add_regions("sublimegdb.breakpoints", bps,
-                            get_setting("breakpoint_scope", "keyword.gdb"),
+        view.add_regions("sublimejdb.breakpoints", bps,
+                            get_setting("breakpoint_scope", "keyword.jdb"),
                             get_setting("breakpoint_icon", "circle"),
                             sublime.HIDDEN)
 
@@ -1148,14 +1148,14 @@ class GDBBreakpointView(GDBView):
     def toggle_watch(self, exp):
         add = True
         for bkpt in self.breakpoints:
-            if isinstance(bkpt, GDBWatch) and bkpt.exp == exp:
+            if isinstance(bkpt, JDBWatch) and bkpt.exp == exp:
                 add = False
                 bkpt.remove()
                 self.breakpoints.remove(bkpt)
                 break
 
         if add:
-            self.breakpoints.append(GDBWatch(exp))
+            self.breakpoints.append(JDBWatch(exp))
         self.update_view()
 
     def toggle_breakpoint_addr(self, addr):
@@ -1164,7 +1164,7 @@ class GDBBreakpointView(GDBView):
             bkpt.remove()
             self.breakpoints.remove(bkpt)
         else:
-            self.breakpoints.append(GDBBreakpoint(addr=addr))
+            self.breakpoints.append(JDBBreakpoint(addr=addr))
         self.update_view()
 
     def toggle_breakpoint(self, filename, line):
@@ -1173,7 +1173,7 @@ class GDBBreakpointView(GDBView):
             bkpt.remove()
             self.breakpoints.remove(bkpt)
         else:
-            self.breakpoints.append(GDBBreakpoint(filename, line))
+            self.breakpoints.append(JDBBreakpoint(filename, line))
         self.update_view()
 
     def sync_breakpoints(self):
@@ -1195,24 +1195,24 @@ class GDBBreakpointView(GDBView):
         self.update()
 
 
-class GDBSessionView(GDBView):
+class JDBSessionView(JDBView):
     def __init__(self):
-        super(GDBSessionView, self).__init__("GDB Session", s=False, settingsprefix="session")
+        super(JDBSessionView, self).__init__("JDB Session", s=False, settingsprefix="session")
 
     def open(self):
-        super(GDBSessionView, self).open()
-        self.set_syntax("Packages/SublimeGDB/gdb_session.tmLanguage")
+        super(JDBSessionView, self).open()
+        self.set_syntax("Packages/SublimeJDB/jdb_session.tmLanguage")
 
 
-gdb_session_view = GDBSessionView()
-gdb_console_view = GDBView("GDB Console", settingsprefix="console")
-gdb_variables_view = GDBVariablesView()
-gdb_callstack_view = GDBCallstackView()
-gdb_register_view = GDBRegisterView()
-gdb_disassembly_view = GDBDisassemblyView()
-gdb_threads_view = GDBThreadsView()
-gdb_breakpoint_view = GDBBreakpointView()
-gdb_views = [gdb_session_view, gdb_console_view, gdb_variables_view, gdb_callstack_view, gdb_register_view, gdb_disassembly_view, gdb_threads_view, gdb_breakpoint_view]
+jdb_session_view = JDBSessionView()
+jdb_console_view = JDBView("JDB Console", settingsprefix="console")
+jdb_variables_view = JDBVariablesView()
+jdb_callstack_view = JDBCallstackView()
+jdb_register_view = JDBRegisterView()
+jdb_disassembly_view = JDBDisassemblyView()
+jdb_threads_view = JDBThreadsView()
+jdb_breakpoint_view = JDBBreakpointView()
+jdb_views = [jdb_session_view, jdb_console_view, jdb_variables_view, jdb_callstack_view, jdb_register_view, jdb_disassembly_view, jdb_threads_view, jdb_breakpoint_view]
 
 def update_view_markers(view=None):
     if view is None:
@@ -1225,17 +1225,17 @@ def update_view_markers(view=None):
     pos_icon = get_setting("position_icon", "bookmark")
 
     cursor = []
-    if fn == gdb_cursor and gdb_cursor_position != 0:
-        cursor.append(view.full_line(view.text_point(gdb_cursor_position - 1, 0)))
-    global gdb_last_cursor_view
-    if gdb_last_cursor_view is not None:
-        gdb_last_cursor_view.erase_regions("sublimegdb.position")
-    gdb_last_cursor_view = view
-    view.add_regions("sublimegdb.position", cursor, pos_scope, pos_icon, sublime.HIDDEN)
+    if fn == jdb_cursor and jdb_cursor_position != 0:
+        cursor.append(view.full_line(view.text_point(jdb_cursor_position - 1, 0)))
+    global jdb_last_cursor_view
+    if jdb_last_cursor_view is not None:
+        jdb_last_cursor_view.erase_regions("sublimejdb.position")
+    jdb_last_cursor_view = view
+    view.add_regions("sublimejdb.position", cursor, pos_scope, pos_icon, sublime.HIDDEN)
 
-    gdb_callstack_view.update_marker(pos_scope, pos_icon)
-    gdb_threads_view.update_marker(pos_scope, pos_icon)
-    gdb_breakpoint_view.update_marker(view)
+    jdb_callstack_view.update_marker(pos_scope, pos_icon)
+    jdb_threads_view.update_marker(pos_scope, pos_icon)
+    jdb_breakpoint_view.update_marker(view)
 
 count = 0
 
@@ -1259,45 +1259,45 @@ def run_cmd(cmd, block=False, mimode=True, timeout=10):
     else:
         cmd = "%s\n\n" % cmd
     log_debug(cmd)
-    if gdb_session_view is not None:
-        gdb_session_view.add_line(cmd, False)
-    gdb_process.stdin.write(cmd.encode(sys.getdefaultencoding()))
+    if jdb_session_view is not None:
+        jdb_session_view.add_line(cmd, False)
+    jdb_process.stdin.write(cmd.encode(sys.getdefaultencoding()))
     if block:
         countstr = "%d^" % count
         i = 0
-        while not gdb_lastresult.startswith(countstr) and i < timeoutcount:
+        while not jdb_lastresult.startswith(countstr) and i < timeoutcount:
             i += 1
             time.sleep(0.001)
         if i >= timeoutcount:
             raise ValueError("Command \"%s\" took longer than %d seconds to perform?" % (cmd, timeout))
-        return gdb_lastresult
+        return jdb_lastresult
     return count
 
 
 def wait_until_stopped():
-    if gdb_run_status == "running":
+    if jdb_run_status == "running":
         result = run_cmd("-exec-interrupt --all", True)
         if "^done" in result:
             i = 0
-            while not "stopped" in gdb_run_status and i < 100:
+            while not "stopped" in jdb_run_status and i < 100:
                 i = i + 1
                 time.sleep(0.1)
             if i >= 100:
-                print("I'm confused... I think status is %s, but it seems it wasn't..." % gdb_run_status)
+                print("I'm confused... I think status is %s, but it seems it wasn't..." % jdb_run_status)
                 return False
             return True
     return False
 
 
 def resume():
-    global gdb_run_status
-    gdb_run_status = "running"
+    global jdb_run_status
+    jdb_run_status = "running"
     run_cmd("-exec-continue", True)
 
 
 def get_result(line):
     res = result_regex.search(line).group(0)
-    if res == "error" and not get_setting("i_know_how_to_use_gdb_thank_you_very_much", False):
+    if res == "error" and not get_setting("i_know_how_to_use_jdb_thank_you_very_much", False):
         sublime.error_message("%s\n\n%s" % (line, "\n".join(traceback.format_stack())))
     return res
 
@@ -1309,57 +1309,57 @@ def listify(var):
 
 
 def update_cursor():
-    global gdb_cursor
-    global gdb_cursor_position
-    global gdb_stack_index
-    global gdb_stack_frame
+    global jdb_cursor
+    global jdb_cursor_position
+    global jdb_stack_index
+    global jdb_stack_frame
 
     res = run_cmd("-stack-info-frame", True)
     if get_result(res) == "error":
-        if gdb_run_status != "running":
-            print("run_status is %s, but got error: %s" % (gdb_run_status, res))
+        if jdb_run_status != "running":
+            print("run_status is %s, but got error: %s" % (jdb_run_status, res))
         return
     currFrame = parse_result_line(res)["frame"]
-    gdb_stack_index = int(currFrame["level"])
+    jdb_stack_index = int(currFrame["level"])
 
     if "fullname" in currFrame:
-        gdb_cursor = currFrame["fullname"]
-        gdb_cursor_position = int(currFrame["line"])
+        jdb_cursor = currFrame["fullname"]
+        jdb_cursor_position = int(currFrame["line"])
         sublime.active_window().focus_group(get_setting("file_group", 0))
-        sublime.active_window().open_file("%s:%d" % (gdb_cursor, gdb_cursor_position), sublime.ENCODED_POSITION)
+        sublime.active_window().open_file("%s:%d" % (jdb_cursor, jdb_cursor_position), sublime.ENCODED_POSITION)
     else:
-        gdb_cursor_position = 0
+        jdb_cursor_position = 0
 
-    sameFrame = gdb_stack_frame is not None and \
-                gdb_stack_frame["func"] == currFrame["func"]
-    if sameFrame and "shlibname" in currFrame and "shlibname" in gdb_stack_frame:
-        sameFrame = currFrame["shlibname"] == gdb_stack_frame["shlibname"]
-    if sameFrame and "fullname" in currFrame and "fullname" in gdb_stack_frame:
-        sameFrame = currFrame["fullname"] == gdb_stack_frame["fullname"]
+    sameFrame = jdb_stack_frame is not None and \
+                jdb_stack_frame["func"] == currFrame["func"]
+    if sameFrame and "shlibname" in currFrame and "shlibname" in jdb_stack_frame:
+        sameFrame = currFrame["shlibname"] == jdb_stack_frame["shlibname"]
+    if sameFrame and "fullname" in currFrame and "fullname" in jdb_stack_frame:
+        sameFrame = currFrame["fullname"] == jdb_stack_frame["fullname"]
 
-    gdb_stack_frame = currFrame
+    jdb_stack_frame = currFrame
     # Always need to update the callstack since it's possible to
     # end up in the current function from many different call stacks
-    gdb_callstack_view.update_callstack()
-    gdb_threads_view.update_threads()
+    jdb_callstack_view.update_callstack()
+    jdb_threads_view.update_threads()
 
     update_view_markers()
-    gdb_variables_view.update_variables(sameFrame)
-    gdb_register_view.update_values()
-    gdb_disassembly_view.update_disassembly()
+    jdb_variables_view.update_variables(sameFrame)
+    jdb_register_view.update_values()
+    jdb_disassembly_view.update_disassembly()
 
 
 def session_ended_status_message():
-    sublime.status_message("GDB session ended")
+    sublime.status_message("JDB session ended")
 
 
-def gdboutput(pipe):
-    global gdb_process
-    global gdb_lastresult
-    global gdb_lastline
-    global gdb_stack_frame
-    global gdb_run_status
-    global gdb_stack_index
+def jdboutput(pipe):
+    global jdb_process
+    global jdb_lastresult
+    global jdb_lastline
+    global jdb_stack_frame
+    global jdb_run_status
+    global jdb_stack_index
     command_result_regex = re.compile("^\d+\^")
     run_status_regex = re.compile("(^\d*\*)([^,]+)")
 
@@ -1369,54 +1369,54 @@ def gdboutput(pipe):
             if len(line) == 0:
                 break
             line = line.strip().decode(sys.getdefaultencoding())
-            log_debug("gdb_%s: %s\n" % ("stdout" if pipe == gdb_process.stdout else "stderr", line))
-            gdb_session_view.add_line("%s\n" % line, False)
+            log_debug("jdb_%s: %s\n" % ("stdout" if pipe == jdb_process.stdout else "stderr", line))
+            jdb_session_view.add_line("%s\n" % line, False)
 
             run_status = run_status_regex.match(line)
             if run_status is not None:
-                gdb_run_status = run_status.group(2)
+                jdb_run_status = run_status.group(2)
                 reason = re.search("(?<=reason=\")[a-zA-Z0-9\-]+(?=\")", line)
                 if reason is not None and reason.group(0).startswith("exited"):
-                    run_cmd("-gdb-exit")
-                elif not "running" in gdb_run_status and not gdb_shutting_down:
+                    run_cmd("-jdb-exit")
+                elif not "running" in jdb_run_status and not jdb_shutting_down:
                     thread_id = re.search('thread-id="(\d+)"', line)
                     if thread_id is not None:
-                        gdb_threads_view.select_thread(int(thread_id.group(1)))
+                        jdb_threads_view.select_thread(int(thread_id.group(1)))
                     sublime.set_timeout(update_cursor, 0)
-            if not line.startswith("(gdb)"):
-                gdb_lastline = line
+            if not line.startswith("(jdb)"):
+                jdb_lastline = line
             if command_result_regex.match(line) is not None:
-                gdb_lastresult = line
+                jdb_lastresult = line
 
             if line.startswith("~"):
-                gdb_console_view.add_line(
+                jdb_console_view.add_line(
                     line[2:-1].replace("\\n", "\n").replace("\\\"", "\"").replace("\\t", "\t"), False)
 
         except:
             traceback.print_exc()
-    if pipe == gdb_process.stdout:
-        log_debug("GDB session ended\n")
-        gdb_session_view.add_line("GDB session ended\n")
+    if pipe == jdb_process.stdout:
+        log_debug("JDB session ended\n")
+        jdb_session_view.add_line("JDB session ended\n")
         sublime.set_timeout(session_ended_status_message, 0)
-        gdb_stack_frame = None
-    global gdb_cursor_position
-    gdb_stack_index = -1
-    gdb_cursor_position = 0
-    gdb_run_status = None
+        jdb_stack_frame = None
+    global jdb_cursor_position
+    jdb_stack_index = -1
+    jdb_cursor_position = 0
+    jdb_run_status = None
     sublime.set_timeout(update_view_markers, 0)
 
-    for view in gdb_views:
+    for view in jdb_views:
         sublime.set_timeout(view.on_session_ended, 0)
     sublime.set_timeout(cleanup, 0)
 
 def cleanup():
     global __debug_file_handle
     if get_setting("close_views", True):
-        for view in gdb_views:
+        for view in jdb_views:
             view.close()
     if get_setting("push_pop_layout", True):
-        gdb_bkp_window.set_layout(gdb_bkp_layout)
-        gdb_bkp_window.focus_view(gdb_bkp_view)
+        jdb_bkp_window.set_layout(jdb_bkp_layout)
+        jdb_bkp_window.focus_view(jdb_bkp_view)
     if __debug_file_handle is not None:
         if __debug_file_handle != sys.stdout:
             __debug_file_handle.close()
@@ -1424,7 +1424,7 @@ def cleanup():
 
 
 def programio(pty, tty):
-    global gdb_process
+    global jdb_process
     exception_count = 0
     class MyFD(object):
         def __init__(self, pty, tty):
@@ -1479,9 +1479,9 @@ def programio(pty, tty):
             line = pipe.readline()
             if len(line) > 0:
                 log_debug("programoutput: %s" % line)
-                gdb_console_view.add_line(line, False)
+                jdb_console_view.add_line(line, False)
             else:
-                if gdb_process.poll() is not None:
+                if jdb_process.poll() is not None:
                     break
                 time.sleep(0.1)
         except:
@@ -1491,48 +1491,48 @@ def programio(pty, tty):
         pipe.close()
 
 
-gdb_input_view = None
-gdb_command_history = []
-gdb_command_history_pos = 0
+jdb_input_view = None
+jdb_command_history = []
+jdb_command_history_pos = 0
 
 
 def set_input(edit, text):
-    gdb_input_view.erase(edit, sublime.Region(0, gdb_input_view.size()))
-    gdb_input_view.insert(edit, 0, text)
+    jdb_input_view.erase(edit, sublime.Region(0, jdb_input_view.size()))
+    jdb_input_view.insert(edit, 0, text)
 
 
-class GdbPrevCmd(sublime_plugin.TextCommand):
+class JdbPrevCmd(sublime_plugin.TextCommand):
     def run(self, edit):
-        global gdb_command_history_pos
-        if gdb_command_history_pos > 0:
-            gdb_command_history_pos -= 1
-        if gdb_command_history_pos < len(gdb_command_history):
-            set_input(edit, gdb_command_history[gdb_command_history_pos])
+        global jdb_command_history_pos
+        if jdb_command_history_pos > 0:
+            jdb_command_history_pos -= 1
+        if jdb_command_history_pos < len(jdb_command_history):
+            set_input(edit, jdb_command_history[jdb_command_history_pos])
 
 
-class GdbNextCmd(sublime_plugin.TextCommand):
+class JdbNextCmd(sublime_plugin.TextCommand):
     def run(self, edit):
-        global gdb_command_history_pos
-        if gdb_command_history_pos < len(gdb_command_history):
-            gdb_command_history_pos += 1
-        if gdb_command_history_pos < len(gdb_command_history):
-            set_input(edit, gdb_command_history[gdb_command_history_pos])
+        global jdb_command_history_pos
+        if jdb_command_history_pos < len(jdb_command_history):
+            jdb_command_history_pos += 1
+        if jdb_command_history_pos < len(jdb_command_history):
+            set_input(edit, jdb_command_history[jdb_command_history_pos])
         else:
             set_input(edit, "")
 
 
 def show_input():
-    global gdb_input_view
-    global gdb_command_history_pos
-    gdb_command_history_pos = len(gdb_command_history)
-    gdb_input_view = sublime.active_window().show_input_panel("GDB", "", input_on_done, input_on_change, input_on_cancel)
+    global jdb_input_view
+    global jdb_command_history_pos
+    jdb_command_history_pos = len(jdb_command_history)
+    jdb_input_view = sublime.active_window().show_input_panel("JDB", "", input_on_done, input_on_change, input_on_cancel)
 
 
 
 def input_on_done(s):
     if s.strip() != "quit":
         show_input()
-        gdb_command_history.append(s)
+        jdb_command_history.append(s)
     run_cmd(s)
 
 
@@ -1545,22 +1545,22 @@ def input_on_change(s):
 
 
 def is_running():
-    return gdb_process is not None and gdb_process.poll() is None
+    return jdb_process is not None and jdb_process.poll() is None
 
 
-class GdbInput(sublime_plugin.WindowCommand):
+class JdbInput(sublime_plugin.WindowCommand):
     def run(self):
         show_input()
 
 
-class GdbLaunch(sublime_plugin.WindowCommand):
+class JdbLaunch(sublime_plugin.WindowCommand):
     def run(self):
-        global gdb_process
-        global gdb_run_status
-        global gdb_bkp_window
-        global gdb_bkp_view
-        global gdb_bkp_layout
-        global gdb_shutting_down
+        global jdb_process
+        global jdb_run_status
+        global jdb_bkp_window
+        global jdb_bkp_view
+        global jdb_bkp_layout
+        global jdb_shutting_down
         global DEBUG
         global DEBUG_FILE
         view = self.window.active_view()
@@ -1568,7 +1568,7 @@ class GdbLaunch(sublime_plugin.WindowCommand):
         DEBUG_FILE = expand_path(get_setting("debug_file", "stdout", view), self.window)
         if DEBUG:
             print("Will write debug info to file: %s" % DEBUG_FILE)
-        if gdb_process is None or gdb_process.poll() is not None:
+        if jdb_process is None or jdb_process.poll() is not None:
             commandline = get_setting("commandline", view=view)
             if isinstance(commandline, list):
                 # backwards compatibility for when the commandline was a list
@@ -1586,23 +1586,23 @@ class GdbLaunch(sublime_plugin.WindowCommand):
                     "rows": [0, 1.0],
                     "cells": [[0,0,1,1], [1,0,2,1]],
                 })
-                v = wnd.open_file("%s/User/SublimeGDB.sublime-settings" % sublime.packages_path())
-                v2 = wnd.open_file("%s/SublimeGDB/SublimeGDB.sublime-settings" % sublime.packages_path())
+                v = wnd.open_file("%s/User/SublimeJDB.sublime-settings" % sublime.packages_path())
+                v2 = wnd.open_file("%s/SublimeJDB/SublimeJDB.sublime-settings" % sublime.packages_path())
                 wnd.set_view_index(v2, 1, 0)
                 return
             if not os.path.exists(path):
                 sublime.error_message("The directory given does not exist: %s" % path)
                 return
-            gdb_process = subprocess.Popen(commandline, shell=True, cwd=path,
+            jdb_process = subprocess.Popen(commandline, shell=True, cwd=path,
                                             stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            log_debug("Process: %s\n" % gdb_process)
-            gdb_bkp_window = sublime.active_window()
+            log_debug("Process: %s\n" % jdb_process)
+            jdb_bkp_window = sublime.active_window()
             #back up current layout before opening the debug one
             #it will be restored when debug is finished
-            gdb_bkp_layout = gdb_bkp_window.get_layout()
-            gdb_bkp_view = gdb_bkp_window.active_view()
-            gdb_bkp_window.set_layout(
+            jdb_bkp_layout = jdb_bkp_window.get_layout()
+            jdb_bkp_view = jdb_bkp_window.active_view()
+            jdb_bkp_window.set_layout(
                 get_setting("layout",
                     {
                         "cols": [0.0, 0.5, 1.0],
@@ -1612,16 +1612,16 @@ class GdbLaunch(sublime_plugin.WindowCommand):
                 )
             )
 
-            for view in gdb_views:
+            for view in jdb_views:
                 if view.is_closed() and view.open_at_start():
                     view.open()
                 view.clear()
 
-            gdb_shutting_down = False
+            jdb_shutting_down = False
 
-            t = threading.Thread(target=gdboutput, args=(gdb_process.stdout,))
+            t = threading.Thread(target=jdboutput, args=(jdb_process.stdout,))
             t.start()
-            t = threading.Thread(target=gdboutput, args=(gdb_process.stderr,))
+            t = threading.Thread(target=jdboutput, args=(jdb_process.stderr,))
             t.start()
 
             try:
@@ -1635,33 +1635,33 @@ class GdbLaunch(sublime_plugin.WindowCommand):
             t = threading.Thread(target=programio, args=(pty,tty))
             t.start()
             try:
-                run_cmd("-gdb-show interpreter", True, timeout=get_setting("gdb_timeout", 20))
+                run_cmd("-jdb-show interpreter", True, timeout=get_setting("jdb_timeout", 20))
             except:
                 sublime.error_message("""\
-It seems you're not running gdb with the "mi" interpreter. Please add
-"--interpreter=mi" to your gdb command line""")
-                gdb_process.stdin.write("quit\n")
+It seems you're not running jdb with the "mi" interpreter. Please add
+"--interpreter=mi" to your jdb command line""")
+                jdb_process.stdin.write("quit\n")
                 return
             run_cmd("-inferior-tty-set %s" % name, True)
 
-            run_cmd("-gdb-set target-async 1")
-            run_cmd("-gdb-set pagination off")
+            run_cmd("-jdb-set target-async 1")
+            run_cmd("-jdb-set pagination off")
             dis_asm_flavor = get_setting("disassembly_flavor", "att", view)
             if dis_asm_flavor == "intel":
-                run_cmd("-gdb-set disassembly-flavor intel")
+                run_cmd("-jdb-set disassembly-flavor intel")
             else:
-                run_cmd("-gdb-set disassembly-flavor att")
-            # if gdb_nonstop:
-            #     run_cmd("-gdb-set non-stop on")
+                run_cmd("-jdb-set disassembly-flavor att")
+            # if jdb_nonstop:
+            #     run_cmd("-jdb-set non-stop on")
 
-            gdb_breakpoint_view.sync_breakpoints()
-            gdb_run_status = "running"
+            jdb_breakpoint_view.sync_breakpoints()
+            jdb_run_status = "running"
 
             run_cmd(get_setting("exec_cmd", "-exec-run"), True)
 
             show_input()
         else:
-            sublime.status_message("GDB is already running!")
+            sublime.status_message("JDB is already running!")
 
     def is_enabled(self):
         return not is_running()
@@ -1670,26 +1670,26 @@ It seems you're not running gdb with the "mi" interpreter. Please add
         return not is_running()
 
 
-class GdbContinue(sublime_plugin.WindowCommand):
+class JdbContinue(sublime_plugin.WindowCommand):
     def run(self):
-        global gdb_cursor_position
-        gdb_cursor_position = 0
+        global jdb_cursor_position
+        jdb_cursor_position = 0
         update_view_markers()
         resume()
 
     def is_enabled(self):
-        return is_running() and gdb_run_status != "running"
+        return is_running() and jdb_run_status != "running"
 
     def is_visible(self):
         return is_running()
 
 
-class GdbExit(sublime_plugin.WindowCommand):
+class JdbExit(sublime_plugin.WindowCommand):
     def run(self):
-        global gdb_shutting_down
-        gdb_shutting_down = True
+        global jdb_shutting_down
+        jdb_shutting_down = True
         wait_until_stopped()
-        run_cmd("-gdb-exit", True)
+        run_cmd("-jdb-exit", True)
 
     def is_enabled(self):
         return is_running()
@@ -1698,162 +1698,162 @@ class GdbExit(sublime_plugin.WindowCommand):
         return is_running()
 
 
-class GdbPause(sublime_plugin.WindowCommand):
+class JdbPause(sublime_plugin.WindowCommand):
     def run(self):
         run_cmd("-exec-interrupt")
 
     def is_enabled(self):
-        return is_running() and gdb_run_status != "stopped"
+        return is_running() and jdb_run_status != "stopped"
 
     def is_visible(self):
-        return is_running() and gdb_run_status != "stopped"
+        return is_running() and jdb_run_status != "stopped"
 
 
-class GdbStepOver(sublime_plugin.WindowCommand):
+class JdbStepOver(sublime_plugin.WindowCommand):
     def run(self):
         run_cmd("-exec-next")
 
     def is_enabled(self):
-        return is_running() and gdb_run_status != "running"
+        return is_running() and jdb_run_status != "running"
 
     def is_visible(self):
         return is_running()
 
 
-class GdbStepInto(sublime_plugin.WindowCommand):
+class JdbStepInto(sublime_plugin.WindowCommand):
     def run(self):
         run_cmd("-exec-step")
 
     def is_enabled(self):
-        return is_running() and gdb_run_status != "running"
+        return is_running() and jdb_run_status != "running"
 
     def is_visible(self):
         return is_running()
 
 
-class GdbNextInstruction(sublime_plugin.WindowCommand):
+class JdbNextInstruction(sublime_plugin.WindowCommand):
     def run(self):
         run_cmd("-exec-next-instruction")
 
     def is_enabled(self):
-        return is_running() and gdb_run_status != "running"
+        return is_running() and jdb_run_status != "running"
 
     def is_visible(self):
         return is_running()
 
 
-class GdbStepOut(sublime_plugin.WindowCommand):
+class JdbStepOut(sublime_plugin.WindowCommand):
     def run(self):
         run_cmd("-exec-finish")
 
     def is_enabled(self):
-        return is_running() and gdb_run_status != "running"
+        return is_running() and jdb_run_status != "running"
 
     def is_visible(self):
         return is_running()
 
 
-class GdbAddWatch(sublime_plugin.TextCommand):
+class JdbAddWatch(sublime_plugin.TextCommand):
     def run(self, edit):
-        if gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id():
-            var = gdb_variables_view.get_variable_at_line(self.view.rowcol(self.view.sel()[0].begin())[0])
+        if jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
+            var = jdb_variables_view.get_variable_at_line(self.view.rowcol(self.view.sel()[0].begin())[0])
             if var is not None:
-                gdb_breakpoint_view.toggle_watch(var.get_expression())
+                jdb_breakpoint_view.toggle_watch(var.get_expression())
             else:
                 sublime.status_message("Don't know how to watch that variable")
         else:
             exp = self.view.substr(self.view.word(self.view.sel()[0].begin()))
-            gdb_breakpoint_view.toggle_watch(exp)
+            jdb_breakpoint_view.toggle_watch(exp)
 
 
-class GdbToggleBreakpoint(sublime_plugin.TextCommand):
+class JdbToggleBreakpoint(sublime_plugin.TextCommand):
     def run(self, edit):
         fn = self.view.file_name()
 
-        if gdb_breakpoint_view.is_open() and self.view.id() == gdb_breakpoint_view.get_view().id():
+        if jdb_breakpoint_view.is_open() and self.view.id() == jdb_breakpoint_view.get_view().id():
             row = self.view.rowcol(self.view.sel()[0].begin())[0]
-            if row < len(gdb_breakpoint_view.breakpoints):
-                gdb_breakpoint_view.breakpoints[row].remove()
-                gdb_breakpoint_view.breakpoints.pop(row)
-                gdb_breakpoint_view.update_view()
-        elif gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id():
-            var = gdb_variables_view.get_variable_at_line(self.view.rowcol(self.view.sel()[0].begin())[0])
+            if row < len(jdb_breakpoint_view.breakpoints):
+                jdb_breakpoint_view.breakpoints[row].remove()
+                jdb_breakpoint_view.breakpoints.pop(row)
+                jdb_breakpoint_view.update_view()
+        elif jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
+            var = jdb_variables_view.get_variable_at_line(self.view.rowcol(self.view.sel()[0].begin())[0])
             if var is not None:
-                gdb_breakpoint_view.toggle_watch(var.get_expression())
-        elif gdb_disassembly_view.is_open() and self.view.id() == gdb_disassembly_view.get_view().id():
+                jdb_breakpoint_view.toggle_watch(var.get_expression())
+        elif jdb_disassembly_view.is_open() and self.view.id() == jdb_disassembly_view.get_view().id():
            for sel in self.view.sel():
                 line = self.view.substr(self.view.line(sel))
                 addr = re.match(r"^[^:]+", line)
                 if addr:
-                   gdb_breakpoint_view.toggle_breakpoint_addr(addr.group(0))
+                   jdb_breakpoint_view.toggle_breakpoint_addr(addr.group(0))
         elif fn is not None:
             for sel in self.view.sel():
                 line, col = self.view.rowcol(sel.a)
-                gdb_breakpoint_view.toggle_breakpoint(fn, line + 1)
+                jdb_breakpoint_view.toggle_breakpoint(fn, line + 1)
         update_view_markers(self.view)
 
 
-class GdbClick(sublime_plugin.TextCommand):
+class JdbClick(sublime_plugin.TextCommand):
     def run(self, edit):
         if not is_running():
             return
 
         row, col = self.view.rowcol(self.view.sel()[0].a)
-        if gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id():
-            gdb_variables_view.expand_collapse_variable(self.view, toggle=True)
-        elif gdb_callstack_view.is_open() and self.view.id() == gdb_callstack_view.get_view().id():
-            gdb_callstack_view.select(row)
-        elif gdb_threads_view.is_open() and self.view.id() == gdb_threads_view.get_view().id():
-            gdb_threads_view.select(row)
+        if jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
+            jdb_variables_view.expand_collapse_variable(self.view, toggle=True)
+        elif jdb_callstack_view.is_open() and self.view.id() == jdb_callstack_view.get_view().id():
+            jdb_callstack_view.select(row)
+        elif jdb_threads_view.is_open() and self.view.id() == jdb_threads_view.get_view().id():
+            jdb_threads_view.select(row)
             update_cursor()
 
     def is_enabled(self):
         return is_running()
 
 
-class GdbDoubleClick(sublime_plugin.TextCommand):
+class JdbDoubleClick(sublime_plugin.TextCommand):
     def run(self, edit):
-        if gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id():
-            self.view.run_command("gdb_edit_variable")
+        if jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
+            self.view.run_command("jdb_edit_variable")
         else:
-            self.view.run_command("gdb_edit_register")
+            self.view.run_command("jdb_edit_register")
 
     def is_enabled(self):
         return is_running() and \
-                ((gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id()) or \
-                 (gdb_register_view.is_open() and self.view.id() == gdb_register_view.get_view().id()))
+                ((jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id()) or \
+                 (jdb_register_view.is_open() and self.view.id() == jdb_register_view.get_view().id()))
 
 
-class GdbCollapseVariable(sublime_plugin.TextCommand):
+class JdbCollapseVariable(sublime_plugin.TextCommand):
     def run(self, edit):
-        gdb_variables_view.expand_collapse_variable(self.view, expand=False)
+        jdb_variables_view.expand_collapse_variable(self.view, expand=False)
 
     def is_enabled(self):
         if not is_running():
             return False
         row, col = self.view.rowcol(self.view.sel()[0].a)
-        if gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id():
+        if jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
             return True
         return False
 
 
-class GdbExpandVariable(sublime_plugin.TextCommand):
+class JdbExpandVariable(sublime_plugin.TextCommand):
     def run(self, edit):
-        gdb_variables_view.expand_collapse_variable(self.view)
+        jdb_variables_view.expand_collapse_variable(self.view)
 
     def is_enabled(self):
         if not is_running():
             return False
         row, col = self.view.rowcol(self.view.sel()[0].a)
-        if gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id():
+        if jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
             return True
         return False
 
 
-class GdbEditVariable(sublime_plugin.TextCommand):
+class JdbEditVariable(sublime_plugin.TextCommand):
     def run(self, edit):
         row, col = self.view.rowcol(self.view.sel()[0].a)
-        var = gdb_variables_view.get_variable_at_line(row)
+        var = jdb_variables_view.get_variable_at_line(row)
         if var.is_editable():
             var.edit()
         else:
@@ -1862,38 +1862,38 @@ class GdbEditVariable(sublime_plugin.TextCommand):
     def is_enabled(self):
         if not is_running():
             return False
-        if gdb_variables_view.is_open() and self.view.id() == gdb_variables_view.get_view().id():
+        if jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
             return True
         return False
 
 
-class GdbEditRegister(sublime_plugin.TextCommand):
+class JdbEditRegister(sublime_plugin.TextCommand):
     def run(self, edit):
         row, col = self.view.rowcol(self.view.sel()[0].a)
-        reg = gdb_register_view.get_register_at_line(row)
+        reg = jdb_register_view.get_register_at_line(row)
         if not reg is None:
             reg.edit()
 
     def is_enabled(self):
         if not is_running():
             return False
-        if gdb_register_view.is_open() and self.view.id() == gdb_register_view.get_view().id():
+        if jdb_register_view.is_open() and self.view.id() == jdb_register_view.get_view().id():
             return True
         return False
 
 
-class GdbEventListener(sublime_plugin.EventListener):
+class JdbEventListener(sublime_plugin.EventListener):
     def on_query_context(self, view, key, operator, operand, match_all):
-        if key == "gdb_running":
+        if key == "jdb_running":
             return is_running() == operand
-        elif key == "gdb_input_view":
-            return gdb_input_view is not None and view.id() == gdb_input_view.id()
-        elif key.startswith("gdb_"):
-            v = gdb_variables_view
-            if key.startswith("gdb_register_view"):
-                v = gdb_register_view
-            elif key.startswith("gdb_disassembly_view"):
-                v = gdb_disassembly_view
+        elif key == "jdb_input_view":
+            return jdb_input_view is not None and view.id() == jdb_input_view.id()
+        elif key.startswith("jdb_"):
+            v = jdb_variables_view
+            if key.startswith("jdb_register_view"):
+                v = jdb_register_view
+            elif key.startswith("jdb_disassembly_view"):
+                v = jdb_disassembly_view
             if key.endswith("open"):
                 return v.is_open() == operand
             else:
@@ -1911,96 +1911,96 @@ class GdbEventListener(sublime_plugin.EventListener):
             update_view_markers(view)
 
     def on_close(self, view):
-        for v in gdb_views:
+        for v in jdb_views:
             if v.is_open() and view.id() == v.get_view().id():
                 v.was_closed()
                 break
 
 
-class GdbOpenSessionView(sublime_plugin.WindowCommand):
+class JdbOpenSessionView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_session_view.open()
+        jdb_session_view.open()
 
     def is_enabled(self):
-        return not gdb_session_view.is_open()
+        return not jdb_session_view.is_open()
 
     def is_visible(self):
-        return not gdb_session_view.is_open()
+        return not jdb_session_view.is_open()
 
 
-class GdbOpenConsoleView(sublime_plugin.WindowCommand):
+class JdbOpenConsoleView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_console_view.open()
+        jdb_console_view.open()
 
     def is_enabled(self):
-        return not gdb_console_view.is_open()
+        return not jdb_console_view.is_open()
 
     def is_visible(self):
-        return not gdb_console_view.is_open()
+        return not jdb_console_view.is_open()
 
 
-class GdbOpenVariablesView(sublime_plugin.WindowCommand):
+class JdbOpenVariablesView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_variables_view.open()
+        jdb_variables_view.open()
 
     def is_enabled(self):
-        return not gdb_variables_view.is_open()
+        return not jdb_variables_view.is_open()
 
     def is_visible(self):
-        return not gdb_variables_view.is_open()
+        return not jdb_variables_view.is_open()
 
 
-class GdbOpenCallstackView(sublime_plugin.WindowCommand):
+class JdbOpenCallstackView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_callstack_view.open()
+        jdb_callstack_view.open()
 
     def is_enabled(self):
-        return not gdb_callstack_view.is_open()
+        return not jdb_callstack_view.is_open()
 
     def is_visible(self):
-        return not gdb_callstack_view.is_open()
+        return not jdb_callstack_view.is_open()
 
 
-class GdbOpenRegisterView(sublime_plugin.WindowCommand):
+class JdbOpenRegisterView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_register_view.open()
+        jdb_register_view.open()
 
     def is_enabled(self):
-        return not gdb_register_view.is_open()
+        return not jdb_register_view.is_open()
 
     def is_visible(self):
-        return not gdb_register_view.is_open()
+        return not jdb_register_view.is_open()
 
 
-class GdbOpenDisassemblyView(sublime_plugin.WindowCommand):
+class JdbOpenDisassemblyView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_disassembly_view.open()
+        jdb_disassembly_view.open()
 
     def is_enabled(self):
-        return not gdb_disassembly_view.is_open()
+        return not jdb_disassembly_view.is_open()
 
     def is_visible(self):
-        return not gdb_disassembly_view.is_open()
+        return not jdb_disassembly_view.is_open()
 
 
-class GdbOpenBreakpointView(sublime_plugin.WindowCommand):
+class JdbOpenBreakpointView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_breakpoint_view.open()
+        jdb_breakpoint_view.open()
 
     def is_enabled(self):
-        return not gdb_breakpoint_view.is_open()
+        return not jdb_breakpoint_view.is_open()
 
     def is_visible(self):
-        return not gdb_breakpoint_view.is_open()
+        return not jdb_breakpoint_view.is_open()
 
 
-class GdbOpenThreadsView(sublime_plugin.WindowCommand):
+class JdbOpenThreadsView(sublime_plugin.WindowCommand):
     def run(self):
-        gdb_threads_view.open()
+        jdb_threads_view.open()
 
     def is_enabled(self):
-        return not gdb_threads_view.is_open()
+        return not jdb_threads_view.is_open()
 
     def is_visible(self):
-        return not gdb_threads_view.is_open()
+        return not jdb_threads_view.is_open()
 

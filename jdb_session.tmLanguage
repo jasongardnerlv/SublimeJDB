@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
     <key>name</key>
-    <string>GDB Session</string>
+    <string>JDB Session</string>
     <key>repository</key>
     <dict>
         <key>string_escaped_char</key>
@@ -35,7 +35,7 @@
                 <key>1</key>
                 <dict>
                     <key>name</key>
-                    <string>constant.other.gdb.command</string>
+                    <string>constant.other.jdb.command</string>
                 </dict>
                 <key>2</key>
                 <dict>
@@ -59,12 +59,12 @@
                 <key>1</key>
                 <dict>
                     <key>name</key>
-                    <string>constant.other.gdb.command</string>
+                    <string>constant.other.jdb.command</string>
                 </dict>
                 <key>2</key>
                 <dict>
                     <key>name</key>
-                    <string>keyword.gdb.returncode</string>
+                    <string>keyword.jdb.returncode</string>
                 </dict>
             </dict>
         </dict>
@@ -77,7 +77,7 @@
                 <key>0</key>
                 <dict>
                     <key>name</key>
-                    <string>punctuation.definition.string.begin.gdb</string>
+                    <string>punctuation.definition.string.begin.jdb</string>
                 </dict>
             </dict>
             <key>end</key>
@@ -87,11 +87,11 @@
                 <key>0</key>
                 <dict>
                     <key>name</key>
-                    <string>punctuation.definition.string.end.gdb</string>
+                    <string>punctuation.definition.string.end.jdb</string>
                 </dict>
             </dict>
             <key>name</key>
-            <string>string.quoted.double.gdb</string>
+            <string>string.quoted.double.jdb</string>
             <key>patterns</key>
             <array>
                 <dict>
@@ -104,11 +104,11 @@
             <key>match</key>
             <string>[^{,=]+(?==)</string>
             <key>name</key>
-            <string>storage.type.gdb</string>
+            <string>storage.type.jdb</string>
         </dict>
     </array>
     <key>scopeName</key>
-    <string>source.gdb.session</string>
+    <string>source.jdb.session</string>
     <key>uuid</key>
     <string>36F30C2C-0443-4944-9FA4-3940126FD71A</string>
 </dict>

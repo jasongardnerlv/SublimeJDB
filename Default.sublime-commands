@@ -1,84 +1,84 @@
 [
     {
-        "caption": "Preferences: SublimeGDB Settings – Default",
+        "caption": "Preferences: SublimeJDB Settings – Default",
         "command": "open_file", "args":
         {
-            "file": "${packages}/SublimeGDB/SublimeGDB.sublime-settings"
+            "file": "${packages}/SublimeJDB/SublimeJDB.sublime-settings"
         }
     },
     {
-        "caption": "Preferences: SublimeGDB Settings – User",
+        "caption": "Preferences: SublimeJDB Settings – User",
         "command": "open_file", "args":
         {
-            "file": "${packages}/User/SublimeGDB.sublime-settings"
+            "file": "${packages}/User/SublimeJDB.sublime-settings"
         }
     },
     {
-        "caption": "SublimeGDB: Show Input Field",
-        "command": "gdb_input"
+        "caption": "SublimeJDB: Show Input Field",
+        "command": "jdb_input"
     },
     {
-        "caption": "SublimeGDB: Start Debugging",
-        "command": "gdb_launch"
+        "caption": "SublimeJDB: Start Debugging",
+        "command": "jdb_launch"
     },
     {
-        "caption": "SublimeGDB: Continue",
-        "command": "gdb_continue"
+        "caption": "SublimeJDB: Continue",
+        "command": "jdb_continue"
     },
     {
-        "caption": "SublimeGDB: Pause",
-        "command": "gdb_pause"
+        "caption": "SublimeJDB: Pause",
+        "command": "jdb_pause"
     },
     {
-        "caption": "SublimeGDB: Step Over",
-        "command": "gdb_step_over"
+        "caption": "SublimeJDB: Step Over",
+        "command": "jdb_step_over"
     },
     {
-        "caption": "SublimeGDB: Step Into",
-        "command": "gdb_step_into"
+        "caption": "SublimeJDB: Step Into",
+        "command": "jdb_step_into"
     },
     {
-        "caption": "SublimeGDB: Step Next Instruction",
-        "command": "gdb_next_instruction"
+        "caption": "SublimeJDB: Step Next Instruction",
+        "command": "jdb_next_instruction"
     },
     {
-        "caption": "SublimeGDB: Step Out",
-        "command": "gdb_step_out"
+        "caption": "SublimeJDB: Step Out",
+        "command": "jdb_step_out"
     },
     {
-        "caption": "SublimeGDB: Stop Debugging",
-        "command": "gdb_exit"
+        "caption": "SublimeJDB: Stop Debugging",
+        "command": "jdb_exit"
     },
     {
-        "caption": "SublimeGDB: Open Register View",
-        "command": "gdb_open_register_view"
+        "caption": "SublimeJDB: Open Register View",
+        "command": "jdb_open_register_view"
     },
     {
-        "caption": "SublimeGDB: Open Session View",
-        "command": "gdb_open_session_view"
+        "caption": "SublimeJDB: Open Session View",
+        "command": "jdb_open_session_view"
     },
     {
-        "caption": "SublimeGDB: Open Console View",
-        "command": "gdb_open_console_view"
+        "caption": "SublimeJDB: Open Console View",
+        "command": "jdb_open_console_view"
     },
     {
-        "caption": "SublimeGDB: Open Callstack View",
-        "command": "gdb_open_callstack_view"
+        "caption": "SublimeJDB: Open Callstack View",
+        "command": "jdb_open_callstack_view"
     },
     {
-        "caption": "SublimeGDB: Open Variables View",
-        "command": "gdb_open_variables_view"
+        "caption": "SublimeJDB: Open Variables View",
+        "command": "jdb_open_variables_view"
     },
     {
-        "caption": "SublimeGDB: Open Disassembly View",
-        "command": "gdb_open_disassembly_view"
+        "caption": "SublimeJDB: Open Disassembly View",
+        "command": "jdb_open_disassembly_view"
     },
     {
-        "caption": "SublimeGDB: Open Breakpoint View",
-        "command": "gdb_open_breakpoint_view"
+        "caption": "SublimeJDB: Open Breakpoint View",
+        "command": "jdb_open_breakpoint_view"
     },
     {
-        "caption": "SublimeGDB: Open Threads View",
-        "command": "gdb_open_threads_view"
+        "caption": "SublimeJDB: Open Threads View",
+        "command": "jdb_open_threads_view"
     }
 ]
