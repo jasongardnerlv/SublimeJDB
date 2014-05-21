@@ -6,8 +6,7 @@
     // "settings":
     // {
     //      "sublimejdb_workingdir": "${folder:${project_path:your_executable_name}}",
-    //      // NOTE: You MUST provide --interpreter=mi for the plugin to work
-    //      "sublimejdb_commandline": "jdb --interpreter=mi ./your_executable_name"
+    //      "sublimejdb_commandline": "jdb -attach 8000"
     //      ]
     // }
     //
@@ -22,11 +21,11 @@
     //
     // ${folder:} is replaced with the dirname of the given path.
     // Example: ${folder:/path/to/file} is replaced with "/path/to".
+
     // "workingdir": "/tmp",
     "workingdir": "notset",
 
-    // NOTE: You MUST provide --interpreter=mi for the plugin to work
-    // "commandline": "jdb --interpreter=mi ./executable",
+    // "commandline": "jdb -attach 8000",
     "commandline": "notset",
 
     // The command to use to run the program.
@@ -106,7 +105,7 @@
 
     // Add "pending breakpoints" for symbols that are dynamically loaded from
     // external shared libraries
-    "debug_ext" : false,
+    // "debug_ext" : false,
 
     // Whether to log the raw data read from and written to the jdb session and the inferior program.
     "debug": true,
