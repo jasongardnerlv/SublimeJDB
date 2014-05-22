@@ -298,13 +298,14 @@ class JDBVariablesView(JDBView):
             return
         self.clear_view()
         result = run_cmd("locals")
-        localLines = result.split("\n")
-        for ll in localLines:
-            if not "Method arguments:" in ll and not "Local variables:" in ll:
-                parts = ll.split(" = ")
-                var_vals = run_cmd("print %s" % parts[0])
-                self.add_variable(var_vals)
-        self.update_view()
+        if not "No local variables" in result:
+            localLines = result.split("\n")
+            for ll in localLines:
+                if not "Method arguments:" in ll and not "Local variables:" in ll:
+                    parts = ll.split(" = ")
+                    var_vals = run_cmd("print %s" % parts[0])
+                    self.add_variable(var_vals)
+            self.update_view()
 
     def get_variable_at_line(self, line, var_list=None):
         if var_list is None:
