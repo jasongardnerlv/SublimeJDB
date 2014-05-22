@@ -528,15 +528,20 @@ def update_cursor():
         c_end = first_line.rfind(".", 0, del_idx)
         l_start = first_line.find(":") + 1
         l_end = first_line.find(")")
+        class_name = first_line[c_start:c_end]
+        file_path = determine_file_from_class(class_name)
 
-        jdb_cursor = determine_file_from_class(first_line[c_start:c_end])
-        jdb_cursor_position = int(first_line[l_start:l_end])
-        sublime.active_window().focus_group(get_setting("file_group", 0))
-        #TODO - handle situation of opening a file not in the project, such as Java API class
-        sublime.active_window().open_file("%s:%d" % (jdb_cursor, jdb_cursor_position), sublime.ENCODED_POSITION)
-
-        update_view_markers()
-        jdb_variables_view.update_variables()
+        if os.path.exists(file_path):
+            jdb_cursor = file_path
+            jdb_cursor_position = int(first_line[l_start:l_end])
+            sublime.active_window().focus_group(get_setting("file_group", 0))
+            sublime.active_window().open_file("%s:%d" % (jdb_cursor, jdb_cursor_position), sublime.ENCODED_POSITION)
+            update_view_markers()
+            jdb_variables_view.update_variables()
+        else:
+            sublime.error_message("Unable to find class: %s" % class_name)
+            #TODO - need to figure out how to handle this situation better
+            sublime.active_window().run_command("jdb_continue")
 
 
 def jdboutput(pipe):
@@ -825,6 +830,24 @@ class JdbToggleBreakpoint(sublime_plugin.TextCommand):
                 line, col = self.view.rowcol(sel.a)
                 jdb_breakpoint_view.toggle_breakpoint(fn, line + 1)
         update_view_markers(self.view)
+
+
+class JdbClick(sublime_plugin.TextCommand):
+    def run(self, edit):
+        # will eventually want this for expanding/collapsing variables
+        pass
+
+    def is_enabled(self):
+        return is_running() and (jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id())
+
+
+class JdbDoubleClick(sublime_plugin.TextCommand):
+    def run(self, edit):
+        # will eventually want this for setting watch/locals values
+        pass
+
+    def is_enabled(self):
+        return is_running() and (jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id())
 
 
 class JdbEventListener(sublime_plugin.EventListener):
