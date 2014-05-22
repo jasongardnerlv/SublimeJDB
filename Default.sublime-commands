@@ -14,20 +14,12 @@
         }
     },
     {
-        "caption": "SublimeJDB: Show Input Field",
-        "command": "jdb_input"
-    },
-    {
         "caption": "SublimeJDB: Start Debugging",
         "command": "jdb_launch"
     },
     {
         "caption": "SublimeJDB: Continue",
         "command": "jdb_continue"
-    },
-    {
-        "caption": "SublimeJDB: Pause",
-        "command": "jdb_pause"
     },
     {
         "caption": "SublimeJDB: Step Over",
@@ -38,10 +30,6 @@
         "command": "jdb_step_into"
     },
     {
-        "caption": "SublimeJDB: Step Next Instruction",
-        "command": "jdb_next_instruction"
-    },
-    {
         "caption": "SublimeJDB: Step Out",
         "command": "jdb_step_out"
     },
@@ -50,35 +38,15 @@
         "command": "jdb_exit"
     },
     {
-        "caption": "SublimeJDB: Open Register View",
-        "command": "jdb_open_register_view"
-    },
-    {
-        "caption": "SublimeJDB: Open Session View",
-        "command": "jdb_open_session_view"
-    },
-    {
         "caption": "SublimeJDB: Open Console View",
         "command": "jdb_open_console_view"
-    },
-    {
-        "caption": "SublimeJDB: Open Callstack View",
-        "command": "jdb_open_callstack_view"
     },
     {
         "caption": "SublimeJDB: Open Variables View",
         "command": "jdb_open_variables_view"
     },
     {
-        "caption": "SublimeJDB: Open Disassembly View",
-        "command": "jdb_open_disassembly_view"
-    },
-    {
         "caption": "SublimeJDB: Open Breakpoint View",
         "command": "jdb_open_breakpoint_view"
-    },
-    {
-        "caption": "SublimeJDB: Open Threads View",
-        "command": "jdb_open_threads_view"
     }
 ]

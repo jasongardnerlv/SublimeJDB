@@ -1,94 +1,77 @@
 [
 
-    {
-        "command": "jdb_edit_register",
-        "keys": ["enter"],
-        "context": [{"key": "jdb_running"}, {"key": "jdb_register_view"}]
-    },
-    {
-        "command": "jdb_edit_variable",
-        "keys": ["enter"],
-        "context": [{"key": "jdb_running"}, {"key": "jdb_variables_view"}]
-    },
-    {
-        "command": "jdb_expand_variable",
-        "keys": ["right"],
-        "context": [{"key": "jdb_running"}, {"key": "jdb_variables_view"}]
-    },
-    {
-        "command": "jdb_collapse_variable",
-        "keys": ["left"],
-        "context": [{"key": "jdb_running"}, {"key": "jdb_variables_view"}]
-    },
-    {
-        "command": "jdb_input",
-        "keys": ["shift+f5"]
-    },
+    // {
+    //     "command": "jdb_edit_register",
+    //     "keys": ["enter"],
+    //     "context": [{"key": "jdb_running"}, {"key": "jdb_register_view"}]
+    // },
+    // {
+    //     "command": "jdb_edit_variable",
+    //     "keys": ["enter"],
+    //     "context": [{"key": "jdb_running"}, {"key": "jdb_variables_view"}]
+    // },
+    // {
+    //     "command": "jdb_expand_variable",
+    //     "keys": ["right"],
+    //     "context": [{"key": "jdb_running"}, {"key": "jdb_variables_view"}]
+    // },
+    // {
+    //     "command": "jdb_collapse_variable",
+    //     "keys": ["left"],
+    //     "context": [{"key": "jdb_running"}, {"key": "jdb_variables_view"}]
+    // },
     {
         "command": "jdb_toggle_breakpoint",
-        "keys": ["f9"]
+        "keys": ["super+.", "super+b"]
     },
     {
         "command": "jdb_launch",
         "context": [{"key": "jdb_running", "operator": "equal", "operand": false}],
-        "keys": ["f5"]
-    },
-    {
-        "command": "jdb_exit",
-        "context": [{"key": "jdb_running", "operator": "equal", "operand": true}],
-        "keys": ["ctrl+f5"]
+        "keys": ["super+.", "super+r"]
     },
     {
         "command": "jdb_continue",
         "context": [{"key": "jdb_running", "operator": "equal", "operand": true}],
-        "keys": ["f5"]
+        "keys": ["super+.", "super+r"]
+    },
+    {
+        "command": "jdb_exit",
+        "context": [{"key": "jdb_running", "operator": "equal", "operand": true}],
+        "keys": ["super+.", "super+x"]
+    },
+    {
+        "command": "jdb_ignored",
+        "context": [{"key": "jdb_running", "operator": "equal", "operand": false}],
+        "keys": ["super+.", "super+x"]
     },
     {
         "command": "jdb_step_over",
-        "context":
-        [
-            {"key": "jdb_running", "operator": "equal", "operand": true},
-            {"key": "jdb_disassembly_view", "operand": false}
-        ],
-        "keys": ["f10"]
+        "context": [{"key": "jdb_running", "operator": "equal", "operand": true}],
+        "keys": ["super+.", "super+o"]
     },
     {
-        "command": "jdb_next_instruction",
-        "context":
-        [
-            {"key": "jdb_running", "operator": "equal", "operand": true},
-            {"key": "jdb_disassembly_view", "operand": true}
-        ],
-        "keys": ["f10"]
+        "command": "jdb_ignored",
+        "context": [{"key": "jdb_running", "operator": "equal", "operand": false}],
+        "keys": ["super+.", "super+o"]
     },
     {
         "command": "jdb_step_into",
         "context": [{"key": "jdb_running", "operator": "equal", "operand": true}],
-        "keys": ["f11"]
+        "keys": ["super+.", "super+i"]
+    },
+    {
+        "command": "jdb_ignored",
+        "context": [{"key": "jdb_running", "operator": "equal", "operand": false}],
+        "keys": ["super+.", "super+i"]
     },
     {
         "command": "jdb_step_out",
         "context": [{"key": "jdb_running", "operator": "equal", "operand": true}],
-        "keys": ["shift+f11"]
+        "keys": ["super+.", "super+u"]
     },
     {
-        "command": "jdb_open_register_view",
-        "context": [{"key": "jdb_register_view_open", "operator": "equal", "operand": false }],
-        "keys": ["ctrl+alt+g"]
-    },
-    {
-        "command": "jdb_open_disassembly_view",
-        "context": [{"key": "jdb_disassembly_view_open", "operator": "equal", "operand": false }],
-        "keys": ["ctrl+f11"]
-    },
-    {
-        "command": "jdb_prev_cmd",
-        "context": [{"key": "jdb_input_view"}],
-        "keys": ["up"]
-    },
-    {
-        "command": "jdb_next_cmd",
-        "context": [{"key": "jdb_input_view"}],
-        "keys": ["down"]
+        "command": "jdb_ignored",
+        "context": [{"key": "jdb_running", "operator": "equal", "operand": false}],
+        "keys": ["super+.", "super+u"]
     }
 ]
