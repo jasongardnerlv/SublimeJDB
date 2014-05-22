@@ -23,8 +23,6 @@ freely, subject to the following restrictions:
 import sublime
 import sublime_plugin
 import subprocess
-import struct
-import tempfile
 import threading
 import time
 import traceback
@@ -32,38 +30,6 @@ import os
 import sys
 import re
 import queue as Queue
-
-def get_setting(key, default=None, view=None):
-    try:
-        if view is None:
-            view = sublime.active_window().active_view()
-        s = view.settings()
-        if s.has("sublimejdb_%s" % key):
-            return s.get("sublimejdb_%s" % key)
-    except:
-        pass
-    return sublime.load_settings("SublimeJDB.sublime-settings").get(key, default)
-
-
-def expand_path(value, window):
-    if window is None:
-        window = sublime.active_window()
-
-    get_existing_files = \
-        lambda m: [ path \
-            for f in window.folders() \
-            for path in [os.path.join(f, m.group('file'))] \
-            if os.path.exists(path) \
-        ]
-    value = re.sub(r'\${project_path:(?P<file>[^}]+)}', lambda m: len(get_existing_files(m)) > 0 and get_existing_files(m)[0] or m.group('file'), value)
-    value = re.sub(r'\${env:(?P<variable>.*)}', lambda m: os.getenv(m.group('variable')), value)
-    if os.getenv("HOME"):
-        value = re.sub(r'\${home}', re.escape(os.getenv('HOME')), value)
-    value = re.sub(r'\${folder:(?P<file>.*)}', lambda m: os.path.dirname(m.group('file')), value)
-    value = value.replace('\\', os.sep)
-    value = value.replace('/', os.sep)
-    return value
-
 
 DEBUG = None
 
@@ -74,24 +40,9 @@ jdb_last_cursor_view = None
 jdb_bkp_layout = {}
 jdb_bkp_window = None
 jdb_bkp_view = None
-
 jdb_shutting_down = False
 jdb_process = None
-
 jdb_run_status = None
-
-def normalize(filename):
-    if filename is None:
-        return None
-    return os.path.abspath(os.path.normcase(filename))
-
-
-def log_debug(line):
-    global DEBUG
-    if DEBUG:
-        sys.stdout.write(line + "\n")
-        sys.stdout.flush()
-
 
 class JDBView(object):
     def __init__(self, name, s=True, settingsprefix=None):
@@ -252,6 +203,7 @@ class JdbViewClear(sublime_plugin.TextCommand):
         self.view.erase(edit, sublime.Region(0, self.view.size()))
         self.view.set_read_only(True)
 
+
 class JdbViewAddLine(sublime_plugin.TextCommand):
     def run(self, edit, line, doScroll):
         self.view.set_read_only(False)
@@ -262,8 +214,36 @@ class JdbViewAddLine(sublime_plugin.TextCommand):
 
 
 class JDBVariable:
-    def __init__(self):
-        pass
+    def __init__(self, vp):
+        self.name = vp[0]
+        self.value = vp[1]
+        # self.parent = parent
+        self.children = []
+        self.line = 0
+        self.is_expanded = False
+
+    def has_children(self):
+        return len(self.children) > 0
+
+    def __str__(self):
+        return "%s = %s" % (self.name, self.value)
+
+    def format(self, indent="", output="", line=0):
+        icon = " "
+        if self.has_children():
+            if self.is_expanded:
+                icon = "-"
+            else:
+                icon = "+"
+
+        output += "%s%s%s\n" % (indent, icon, self)
+        self.line = line
+        line = line + 1
+        indent += "    "
+        if self.is_expanded:
+            for child in self.children:
+                output, line = child.format(indent, output, line)
+        return (output, line)
 
 
 class JDBVariablesView(JDBView):
@@ -278,30 +258,12 @@ class JDBVariablesView(JDBView):
             self.update_variables(False)
 
     def update_view(self):
-        self.clear()
         output = ""
         line = 0
-        dirtylist = []
         for local in self.variables:
-            output, line = local.format(line=line, dirty=dirtylist)
+            output, line = local.format(line=line)
             self.add_line(output)
         self.update()
-        regions = []
-        v = self.get_view()
-        for dirty in dirtylist:
-            regions.append(v.full_line(v.text_point(dirty.line, 0)))
-        v.add_regions("sublimejdb.dirtyvariables", regions,
-                        get_setting("changed_variable_scope", "entity.name.class"),
-                        get_setting("changed_variable_icon", ""),
-                        sublime.DRAW_OUTLINED)
-
-    # def extract_varnames(self, res):
-    #     if "name" in res:
-    #         return listify(res["name"])
-    #     elif len(res) > 0 and isinstance(res, list):
-    #         if "name" in res[0]:
-    #             return [x["name"] for x in res]
-    #     return []
 
     def add_variable(self, exp):
         v = self.create_variable(exp)
@@ -309,48 +271,24 @@ class JDBVariablesView(JDBView):
             self.variables.append(v)
 
     def create_variable(self, exp):
-        return JDBVariable()
+        parts = exp.split(" = ")
+        return JDBVariable(parts)
+
+    def clear_view(self):
+        self.variables = []
+        self.clear()
 
     def update_variables(self):
         if not self.should_update():
             return
-        for var in self.variables:
-            var.clear_dirty()
-        # result = run_cmd("locals")
-        # log_debug("--\n%s\n--" % result)
-
-        # dellist = []
-        # for value in ret:
-        #     name = value["name"]
-        #     for var in self.variables:
-        #         real = var.find(name)
-        #         if real is not None:
-        #             if  "in_scope" in value and value["in_scope"] == "false":
-        #                 real.delete()
-        #                 dellist.append(real)
-        #                 continue
-        #             real.update(value)
-        #             if not "value" in value and not "new_value" in value:
-        #                 real.update_value()
-        #             break
-        # for item in dellist:
-        #     self.variables.remove(item)
-        # if len(self.variables) == 0:
-        #     # Is it really the same frame? Seems everything was removed, so might as well pull all data again
-        #     sameFrame = False
-        # else:
-        #     loc = self.extract_varnames(parse_result_line(run_cmd("-stack-list-locals 0", True))["locals"])
-        #     tracked = []
-        #     for var in loc:
-        #         create = True
-        #         for var2 in self.variables:
-        #             if var2['exp'] == var and var2 not in tracked:
-        #                 tracked.append(var2)
-        #                 create = False
-        #                 break
-        #         if create:
-        #             self.add_variable(var)
-
+        self.clear_view()
+        result = run_cmd("locals")
+        localLines = result.split("\n")
+        for ll in localLines:
+            if not "Method arguments:" in ll and not "Local variables:" in ll:
+                parts = ll.split(" = ")
+                var_vals = run_cmd("print %s" % parts[0])
+                self.add_variable(var_vals)
         self.update_view()
 
     def get_variable_at_line(self, line, var_list=None):
@@ -366,25 +304,6 @@ class JDBVariablesView(JDBView):
                 return self.get_variable_at_line(line, var_list[i - 1].children)
         return self.get_variable_at_line(line, var_list[len(var_list) - 1].children)
 
-    def expand_collapse_variable(self, view, expand=True, toggle=False):
-        row, col = view.rowcol(view.sel()[0].a)
-        if self.is_open() and view.id() == self.get_view().id():
-            var = self.get_variable_at_line(row)
-            if var and var.has_children():
-                if toggle:
-                    if var.is_expanded:
-                        var.collapse()
-                    else:
-                        var.expand()
-                elif expand:
-                    var.expand()
-                else:
-                    var.collapse()
-                pos = view.viewport_position()
-                self.update_view()
-                self.set_viewport_position(pos)
-                self.update()
-
 
 class JDBBreakpoint(object):
     def __init__(self, filename="", line=0):
@@ -395,76 +314,28 @@ class JDBBreakpoint(object):
 
     @property
     def line(self):
-        # if self.number != -1:
-        #     return self.resolved_line
         return self.original_line
 
     @property
     def filename(self):
-        # if self.number != -1:
-        #     return normalize(self.resolved_filename)
         return normalize(self.original_filename)
-
-    # def clear(self):
-    #     self.resolved_filename = ""
-    #     self.resolved_line = 0
-    #     self.number = -1
-
-    # def breakpoint_added(self, res):
-    #     if "bkpt" not in res:
-    #         return
-    #     bp = res["bkpt"]
-    #     if "fullname" in bp:
-    #         self.resolved_filename = bp["fullname"]
-    #     elif "file" in bp:
-    #         self.resolved_filename = bp["file"]
-    #     # elif "original-location" in bp and self.addr == 0:
-    #     #     self.resolved_filename = bp["original-location"].split(":", 1)[0]
-    #     #     self.resolved_line = int(bp["original-location"].split(":", 1)[1])
-
-    #     if self.resolved_line == 0 and "line" in bp:
-    #         self.resolved_line = int(bp["line"])
-
-    #     if not "/" in self.resolved_filename and not "\\" in self.resolved_filename:
-    #         self.resolved_filename = self.original_filename
-    #     self.number = int(bp["number"])
 
     def insert(self):
         break_cmd = "stop at"
         class_name = determine_class_from_file(self.original_filename)
         cmd = "%s %s:%d" % (break_cmd, class_name, self.original_line)
         out = run_cmd(cmd)
-        if out.find("is not a valid class name") > -1 or out.find("Deferring breakpoint") > -1:
+        if "is not a valid class name" in out or "Deferring breakpoint" in out:
             sublime.error_message("%s%s" % ("Cannot locate class: ", class_name))
             return
-        # self.breakpoint_added(res)
-        # res = parse_result_line(out)
-        # if "bkpt" not in res and "matches" in res:
-        #     for match in res["matches"]["b"]:
-        #         cmd = "%s *%s" % (break_cmd, match["addr"])
-        #         out = run_cmd(cmd)
-        #         if get_result(out) == "error":
-        #             return
-        #         res = parse_result_line(out)
-        #         self.breakpoint_added(res)
-        # else:
-        #     self.breakpoint_added(res)
-        # self.breakpoint_added(res)
 
     def add(self):
         if is_running():
-            # res = wait_until_stopped()
             self.insert()
-            # if res:
-            # resume()
 
     def remove(self):
         if is_running():
-            # res = wait_until_stopped()
-            # TODO - remove breakpoint
-            # run_cmd("clear %s" % self.number)
-            # if res:
-            # resume()
+            # TODO
             pass
 
     def format(self):
@@ -571,6 +442,7 @@ jdb_variables_view = JDBVariablesView()
 jdb_breakpoint_view = JDBBreakpointView()
 jdb_views = [jdb_console_view, jdb_variables_view, jdb_breakpoint_view]
 
+
 def update_view_markers(view=None):
     if view is None:
         view = sublime.active_window().active_view()
@@ -591,6 +463,7 @@ def update_view_markers(view=None):
     view.add_regions("sublimejdb.position", cursor, pos_scope, pos_icon, sublime.HIDDEN)
 
     jdb_breakpoint_view.update_marker(view)
+
 
 count = 0
 
@@ -618,7 +491,7 @@ def run_cmd(cmd, block=True):
             time.sleep(0.001)
         if i >= timeoutcount:
             raise ValueError("Command \"%s\" took longer than %d seconds to perform?" % (cmd, timeout))
-        return jdb_lastresult
+        return jdb_lastresult[len(countstr):]
 
 
 def wait_until_loaded():
@@ -631,12 +504,6 @@ def wait_until_loaded():
             return False
     log_debug("JDB is now loaded!")
     return True
-
-
-def resume():
-    global jdb_run_status
-    jdb_run_status = "running"
-    run_cmd("cont", False)
 
 
 def update_cursor():
@@ -708,7 +575,7 @@ def jdboutput(pipe):
             if thread_out_regex.match(current_line) is not None:
                 unsol_result = "%s%s" % (prev_lines, current_line)
                 log_debug("jdb_%s: %s" % ("stdout" if pipe == jdb_process.stdout else "stderr", unsol_result))
-                jdb_console_view.add_line("<- %s\n" % unsol_result, False)
+                jdb_console_view.add_line("<-%s\n" % unsol_result, False)
                 if jdb_run_status == "running":
                     jdb_run_status = "stopped"
                     sublime.set_timeout(update_cursor, 0)
@@ -733,6 +600,7 @@ def jdboutput(pipe):
         sublime.set_timeout(view.on_session_ended, 0)
     sublime.set_timeout(cleanup, 0)
 
+
 def cleanup():
     if get_setting("close_views", True):
         for view in jdb_views:
@@ -741,8 +609,16 @@ def cleanup():
         jdb_bkp_window.set_layout(jdb_bkp_layout)
         jdb_bkp_window.focus_view(jdb_bkp_view)
 
+
 def is_running():
     return jdb_process is not None and jdb_process.poll() is None
+
+
+def go_to_run_state():
+    global jdb_run_status
+    jdb_variables_view.clear_view()
+    jdb_run_status = "running"
+
 
 class JdbLaunch(sublime_plugin.WindowCommand):
     def run(self):
@@ -815,7 +691,7 @@ class JdbLaunch(sublime_plugin.WindowCommand):
                 sublime.error_message("JDB did not start.  Check that the Java process is running and listening and that your settings are correct")
                 run_cmd("quit", False)
                 return
-            jdb_run_status = "running"
+            go_to_run_state()
             jdb_console_view.add_line("## JDB Attached ##\n")
             jdb_breakpoint_view.sync_breakpoints()
         else:
@@ -833,7 +709,8 @@ class JdbContinue(sublime_plugin.WindowCommand):
         global jdb_cursor_position
         jdb_cursor_position = 0
         update_view_markers()
-        resume()
+        go_to_run_state()
+        run_cmd("cont", False)
 
     def is_enabled(self):
         return is_running() and jdb_run_status != "running"
@@ -858,8 +735,7 @@ class JdbExit(sublime_plugin.WindowCommand):
 
 class JdbStepOver(sublime_plugin.WindowCommand):
     def run(self):
-        global jdb_run_status
-        jdb_run_status = "running"
+        go_to_run_state()
         run_cmd("next", False)
 
     def is_enabled(self):
@@ -871,8 +747,7 @@ class JdbStepOver(sublime_plugin.WindowCommand):
 
 class JdbStepInto(sublime_plugin.WindowCommand):
     def run(self):
-        global jdb_run_status
-        jdb_run_status = "running"
+        go_to_run_state()
         run_cmd("step", False)
 
     def is_enabled(self):
@@ -884,8 +759,7 @@ class JdbStepInto(sublime_plugin.WindowCommand):
 
 class JdbStepOut(sublime_plugin.WindowCommand):
     def run(self):
-        global jdb_run_status
-        jdb_run_status = "running"
+        go_to_run_state()
         run_cmd("step up", False)
 
     def is_enabled(self):
@@ -894,22 +768,10 @@ class JdbStepOut(sublime_plugin.WindowCommand):
     def is_visible(self):
         return is_running()
 
+
 class JdbIgnored(sublime_plugin.WindowCommand):
     def run(self):
         pass
-
-
-# class JdbAddWatch(sublime_plugin.TextCommand):
-#     def run(self, edit):
-#         if jdb_variables_view.is_open() and self.view.id() == jdb_variables_view.get_view().id():
-#             var = jdb_variables_view.get_variable_at_line(self.view.rowcol(self.view.sel()[0].begin())[0])
-#             if var is not None:
-#                 jdb_breakpoint_view.toggle_watch(var.get_expression())
-#             else:
-#                 sublime.status_message("Don't know how to watch that variable")
-#         else:
-#             exp = self.view.substr(self.view.word(self.view.sel()[0].begin()))
-#             jdb_breakpoint_view.toggle_watch(exp)
 
 
 class JdbToggleBreakpoint(sublime_plugin.TextCommand):
@@ -1006,6 +868,50 @@ class JdbOpenBreakpointView(sublime_plugin.WindowCommand):
     def is_visible(self):
         return not jdb_breakpoint_view.is_open()
 
+
+def normalize(filename):
+    if filename is None:
+        return None
+    return os.path.abspath(os.path.normcase(filename))
+
+
+def log_debug(line):
+    global DEBUG
+    if DEBUG:
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+
+
+def get_setting(key, default=None, view=None):
+    try:
+        if view is None:
+            view = sublime.active_window().active_view()
+        s = view.settings()
+        if s.has("sublimejdb_%s" % key):
+            return s.get("sublimejdb_%s" % key)
+    except:
+        pass
+    return sublime.load_settings("SublimeJDB.sublime-settings").get(key, default)
+
+
+def expand_path(value, window):
+    if window is None:
+        window = sublime.active_window()
+
+    get_existing_files = \
+        lambda m: [ path \
+            for f in window.folders() \
+            for path in [os.path.join(f, m.group('file'))] \
+            if os.path.exists(path) \
+        ]
+    value = re.sub(r'\${project_path:(?P<file>[^}]+)}', lambda m: len(get_existing_files(m)) > 0 and get_existing_files(m)[0] or m.group('file'), value)
+    value = re.sub(r'\${env:(?P<variable>.*)}', lambda m: os.getenv(m.group('variable')), value)
+    if os.getenv("HOME"):
+        value = re.sub(r'\${home}', re.escape(os.getenv('HOME')), value)
+    value = re.sub(r'\${folder:(?P<file>.*)}', lambda m: os.path.dirname(m.group('file')), value)
+    value = value.replace('\\', os.sep)
+    value = value.replace('/', os.sep)
+    return value
 
 def determine_class_from_file(filename):
     class_name = filename.replace("\\", "/")
