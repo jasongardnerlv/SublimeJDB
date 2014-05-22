@@ -4,7 +4,7 @@
     "children": [
         { "caption": "-", "id": "breakpoints" },
         { "command": "jdb_toggle_breakpoint", "caption": "Toggle Breakpoint" },
-        { "command": "jdb_launch", "caption": "Run"},
+        { "command": "jdb_launch", "caption": "Start Debugging"},
         { "command": "jdb_continue", "caption": "Continue" },
         { "command": "jdb_step_over", "caption": "Step Over" },
         { "command": "jdb_step_into", "caption": "Step Into" },
